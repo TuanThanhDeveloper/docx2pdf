@@ -1,3 +1,4 @@
+import os
 import subprocess
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
@@ -20,10 +21,13 @@ task_lock = threading.Lock()
 
 
 def allowed_file(filename):
+    print(filename)
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def convert_file(file_path, output_filename):
-    command = ['abiword', f'--to={output_filename}', file_path]
+    # command = ['abiword', f'--to={output_filename}', file_path]
+    # command = ['unoconvert', '--convert-to', 'pdf', file_path, output_filename]
+    command = ['libreoffice', '--nologo', '--infilter=Text (encoded):UTF8','--headless', '--convert-to', 'pdf', '--outdir', output_filename, file_path]
     try:
         subprocess.Popen(command)
         print('Conversion started:', file_path)
@@ -33,7 +37,7 @@ def convert_file(file_path, output_filename):
 def process_conversion(file, file_path):
     file.save(file_path)
     output_file = file_path.with_suffix('.pdf')
-    output_filename = app.config['OUTPUT_FOLDER'] / output_file
+    output_filename = os.path.join(app.config['OUTPUT_FOLDER'], os.path.basename(output_file))
     with task_lock:
         task_status[file_path] = 'in_progress'
 
@@ -87,6 +91,13 @@ def convert():
     response = {'success': False, 'message': 'Invalid file extension'}
     return jsonify(response)
 
+# @app.route('/status', methods=['GET'])
+# def download():
+#     filename = request.args.get('filename')
+#     if not os.path.isfile(os.path.join(app.config['OUTPUT_FOLDER'], os.path.basename(filename))):
+#         return jsonify({'success': False, 'message': 'file is processing'})
+#     return jsonify({'success': True})
+
 @app.route('/download', methods=['GET'])
 def download():
     filename = request.args.get('filename')
@@ -97,6 +108,6 @@ if __name__ == '__main__':
     conversion_thread = threading.Thread(target=conversion_worker)
     conversion_thread.daemon = True
     conversion_thread.start()
-
+    app.debug = True
     app.run()
 
